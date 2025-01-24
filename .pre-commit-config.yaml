@@ -1,0 +1,43 @@
+repos:
+  - repo: local
+    hooks:
+
+      # FRONTEND ----------------------------------------------
+
+      - id: frontend
+        name: frontend
+        stages: [ pre-commit ]
+        language: system
+        types_or: [ javascript, jsx, ts, tsx, css, scss ]
+        entry: npm
+        files: frontend/
+        args: [ "--prefix", "frontend", "run", "lint:staged" ]
+
+      # BACKEND ----------------------------------------------
+
+      - id: backend-ruff-format
+        name: backend-ruff-format
+        stages: [ pre-commit ]
+        language: docker_image
+        types: [ python ]
+        entry: --entrypoint ruff compose-dev-backend
+        files: app/
+        args: [ "format", "--config", "pyproject.toml" ]
+
+      - id: backend-ruff
+        name: backend-ruff
+        stages: [ pre-commit ]
+        language: docker_image
+        types: [ python ]
+        entry: --entrypoint ruff compose-dev-backend
+        files: app/
+        args: [ "check", "--config", "pyproject.toml" ]
+
+      - id: backend-mypy
+        name: backend-mypy
+        stages: [ pre-commit ]
+        language: docker_image
+        types: [ python ]
+        entry: --entrypoint mypy compose-dev-backend
+        files: app/
+        args: [ "--config-file", "pyproject.toml" ]

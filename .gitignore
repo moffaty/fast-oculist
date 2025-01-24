@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtualenvs
+poetry.lock
+.env
+.venv/
+!.env.example
+
+# Logs
+*.log
+
+# Test outputs
+.coverage
+.cache
+.tox/
+.nox/
+htmlcov/
+*.cover
+*.py,cover
+.hypothesis/
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.bak
+*~
+
+# Cache
+.mypy_cache
+.pytest_cache
+
+# System files
+.DS_Store
+Thumbs.db
