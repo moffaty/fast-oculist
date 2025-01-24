@@ -1,17 +1,18 @@
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from api import router as api_router
+import uvicorn
 from core.settings import APP_SETTINGS
 from core.log_config import LOG_CONFIG
 from fastapi.responses import ORJSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-import uvicorn
+
+from api import router as api_router
 
 
 app = FastAPI(
-    title="search-api",
+    title=APP_SETTINGS.PROJECT_NAME,
     version=APP_SETTINGS.VERSION,
     docs_url="/api/openapi" if APP_SETTINGS.DEBUG else None,
     openapi_url="/api/openapi.json" if APP_SETTINGS.DEBUG else None,

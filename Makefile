@@ -1,7 +1,9 @@
 .PHONY: run lint test
 
+shell:
+	poetry shell
 run:
-	poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	poetry run python app/main.py
 
 lint:
 	poetry run black .
