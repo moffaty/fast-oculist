@@ -1,3 +1,4 @@
+from index import router as index_router
 from fastapi import FastAPI
 import uvicorn
 from core.settings import APP_SETTINGS
@@ -17,7 +18,6 @@ app = FastAPI(
     docs_url="/api/openapi" if APP_SETTINGS.DEBUG else None,
     openapi_url="/api/openapi.json" if APP_SETTINGS.DEBUG else None,
     default_response_class=ORJSONResponse,
-    root_path="/rest",
     middleware=[
         Middleware(
             CORSMiddleware,
@@ -33,8 +33,9 @@ app = FastAPI(
     ],
 )
 
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/static", StaticFiles(directory=APP_SETTINGS.STATIC_DIR), name="static")
 app.include_router(api_router.router, prefix="/api")
+app.include_router(index_router, prefix="/index")
 
 if __name__ == "__main__":
     uvicorn.run(

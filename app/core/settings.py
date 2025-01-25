@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     PORT: int
 
     ROOT_DIR: Path = Path(__file__).parent.parent
+    STATIC_DIR: Path = ROOT_DIR / "static"
+    TEMPLATE_DIR: Path = ROOT_DIR / "templates"
 
     class Config:
         env_file = ".env"
