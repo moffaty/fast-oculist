@@ -1,6 +1,7 @@
 import { CameraSubject } from "./cameraSubject.js";
 import { CompassObserver } from "./observers/compass.js";
 import { VideoObserver } from "./observers/video.js";
+import { CameraVectorEnum } from "./enum.js"
 
 export class CameraController {
   constructor(cameraElement) {
@@ -20,9 +21,26 @@ export class CameraController {
   }
 
   initControls() {
-    this.cameraElement.querySelector(".arrow-top").addEventListener("click", () => this.camera.setAngle(this.camera.angle + 5));
-    this.cameraElement.querySelector(".arrow-bottom").addEventListener("click", () => this.camera.setAngle(this.camera.angle - 5));
-    this.cameraElement.querySelector(".arrow-left").addEventListener("click", () => this.camera.setAngle(this.camera.angle - 10));
-    this.cameraElement.querySelector(".arrow-right").addEventListener("click", () => this.camera.setAngle(this.camera.angle + 10));
+    this.cameraElement.querySelector(".arrow-top").addEventListener("click", () => {
+        const newAngle = this.camera.angle + 5;
+        this.camera.setAngle({ angle: newAngle, source: CameraVectorEnum.TOP });
+    });
+    
+    this.cameraElement.querySelector(".arrow-bottom").addEventListener("click", () => {
+        const newAngle = this.camera.angle - 5;
+        this.camera.setAngle({ angle: newAngle, source: CameraVectorEnum.BOTTOM });
+    });
+
+    this.cameraElement.querySelector(".arrow-left").addEventListener("click", () => {
+        const newAngle = this.camera.angle + 5;
+        this.camera.setAngle({ angle: newAngle, source: CameraVectorEnum.LEFT });
+    });
+    
+    this.cameraElement.querySelector(".arrow-right").addEventListener("click", () => {
+        const newAngle = this.camera.angle - 5;
+        this.camera.setAngle({ angle: newAngle, source: CameraVectorEnum.RIGHT });
+    });
   }
+
+  initVideo() {}
 }

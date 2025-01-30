@@ -11,8 +11,8 @@ export class Subject {
       this.observers = this.observers.filter(sub => sub !== observer);
     }
   
-    notify() {
-      this.observers.forEach(observer => observer.update(this.angle));
+    notify(data) {
+      this.observers.forEach(observer => observer.update(data));
     }
   }
   
