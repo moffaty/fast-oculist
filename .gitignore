@@ -35,7 +35,7 @@ htmlcov/
 # Cache
 .mypy_cache
 .pytest_cache
-
+.ruff_cache
 # System files
 .DS_Store
 Thumbs.db
