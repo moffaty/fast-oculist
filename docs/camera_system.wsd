@@ -1,0 +1,8 @@
+@startuml Система видеонаблюдения
+!theme cerulean-outline
+package "Система видеонаблюдения" {
+  [RTSP Camera] --> [OCR Module] : Видеосообщение
+  [OCR Module] --> [PTZ Controller] : Вычисление объекта
+  [PTZ Controller] --> [RTSP Camera] : Удержание позиции
+}
+@enduml

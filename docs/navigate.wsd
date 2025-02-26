@@ -1,0 +1,17 @@
+@startuml Navigate
+actor Client
+participant "FastAPI Router" as Router
+participant "Navigator" as Navigator
+participant "NavigationPoint" as NavigationPoint
+
+Client -> Router: POST /navigate (point1, point2)
+Router -> Navigator: calculate_navigation_point(point1, point2)
+Navigator -> Navigator: Convert points to UTM
+Navigator -> Navigator: Calculate distance between points
+Navigator -> Navigator: Calculate average bearing
+Navigator -> Navigator: Project new point
+Navigator -> Navigator: Convert back to WGS84
+Navigator -> NavigationPoint: Create NavigationPoint(lat, lon, bearing)
+Navigator -> Router: Return NavigationPoint
+Router -> Client: Response 200 OK (NavigationPoint)
+@enduml
