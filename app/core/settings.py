@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     VERSION: str
     DEBUG: bool
     PORT: int
+    CAMERAS: list[str]
 
     ROOT_DIR: Path = Path(__file__).parent.parent
     STATIC_DIR: Path = ROOT_DIR / "static"

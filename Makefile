@@ -30,6 +30,12 @@ docker-logs:
 # Команда для запуска контейнера с пробросом текущей директории (для разработки)
 docker-dev:
 	docker run --rm -it -v $(PWD):/app -p $(PORT):$(PORT) --name $(CONTAINER_NAME) $(IMAGE_NAME) /bin/bash
+setup-tileserver:
+	docker volume create osm-data; docker run  -v $PWD/zambia-latest.osm.pbf:/data/region.osm.pbf  -v osm-data:/data/database/  overv/openstreetmap-tile-server  import
+delete-tileserver:
+	docker ps -a | grep overv | awk '{print $1}' | xargs -r docker stop && docker ps -a | grep overv | awk '{print $1}' | xargs -r docker rm
+download-map:
+	wget https://download.geofabrik.de/russia-latest.osm.pbf
 lint:
 	poetry run black .
 test:
