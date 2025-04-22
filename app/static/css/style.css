@@ -71,8 +71,8 @@ html, body {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 50%;
-  height: 50%;
+  width: 75%;
+  height: 75%;
   border: 1px solid lightgray;
 }
 
@@ -133,8 +133,23 @@ html, body {
   transform: translateY(-50%);
 }
 
+.fullscreen-btn {
+  top: 90%;
+  right: 1rem;
+  transform: translateY(-50%);
+  padding: 1px 10px 1px 10px; 
+}
+
 .arrow-bottom {
   bottom: 10px;
   left: 50%;
   transform: translateX(-50%);
+}
+
+[class*="camera-x-"], [class*="camera-y-"]{
+  display: inline-flex;
+}
+
+.camera-x-angle::after , .camera-y-angle::after {
+  content: "°";
 }
