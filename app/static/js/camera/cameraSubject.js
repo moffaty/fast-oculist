@@ -7,7 +7,7 @@ export class CameraSubject extends Subject {
   
     setAngle(data) {
       this.angle = data.angle;
-      this.notify({ ...data });
+      this.notify(data.angle);
     }
 }
   

@@ -33,24 +33,24 @@ LOG_CONFIG["formatters"]["access"]["fmt"] = (
 LOG_CONFIG["formatters"]["default"]["fmt"] = "%(levelprefix)s %(asctime)s [%(name)s] - %(message)s"
 
 # Настройка кастомного хендлера
-log_file_handler = TimeStructuredFileHandler()
+# log_file_handler = TimeStructuredFileHandler()
 
-LOG_CONFIG["handlers"]["structured_file"] = {
-    "class": "logging.StreamHandler",  # мы используем stream из кастомного хендлера
-    "formatter": "default",
-    "level": "DEBUG",
-    "stream": log_file_handler.stream,
-}
+# LOG_CONFIG["handlers"]["structured_file"] = {
+#     "class": "logging.StreamHandler",  # мы используем stream из кастомного хендлера
+#     "formatter": "default",
+#     "level": "DEBUG",
+#     "stream": log_file_handler.stream,
+# }
 
 # Логгер приложения
-LOG_CONFIG["loggers"][APP_SETTINGS.PROJECT_NAME] = {
-    "handlers": ["default", "structured_file"],
-    "level": "DEBUG",
-    "propagate": False,
-}
+# LOG_CONFIG["loggers"] = {
+#     # "handlers": ["default", "structured_file"],
+#     "level": "DEBUG",
+#     "propagate": False,
+# }
 
 # Применяем конфигурацию
 logging.config.dictConfig(LOG_CONFIG)
 
 # Готовый логгер, который можно импортировать
-logger = logging.getLogger(APP_SETTINGS.PROJECT_NAME)
+logger = logging.getLogger("123")

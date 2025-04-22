@@ -8,7 +8,7 @@ export class CameraController {
     this.cameraElement = cameraElement;
     this.camera = new CameraSubject();
 
-    const compassElement = this.cameraElement.querySelector(".compass p");
+    const compassElement = this.cameraElement.querySelector(".compass .camera-x-angle");
     this.compass = new CompassObserver(compassElement);
 
     const videoElement = this.cameraElement.querySelector(".video-source");
