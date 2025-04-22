@@ -1,3 +1,4 @@
+# log_utils.py
 import os
 import logging
 from datetime import datetime
@@ -19,38 +20,42 @@ class TimeStructuredFileHandler(logging.FileHandler):
 
     def _get_log_file_path(self) -> str:
         now = datetime.now()
-        path = os.path.join(self.base_dir, now.strftime("%Y-%m"), now.strftime("%d"), now.strftime("%H"), self.filename)
-        return path
+        return os.path.join(
+            self.base_dir,
+            now.strftime("%Y-%m"),
+            now.strftime("%d"),
+            now.strftime("%H"),
+            self.filename,
+        )
 
 
-# Копируем базовую конфигурацию uvicorn
 LOG_CONFIG = LOGGING_CONFIG.copy()
 
-# Настройка форматтеров
-LOG_CONFIG["formatters"]["access"]["fmt"] = (
-    "%(levelprefix)s %(asctime)s - %(client_addr)s - %(request_line)s %(status_code)s"
-)
-LOG_CONFIG["formatters"]["default"]["fmt"] = "%(levelprefix)s %(asctime)s [%(name)s] - %(message)s"
 
-# Настройка кастомного хендлера
-log_file_handler = TimeStructuredFileHandler()
+def setup_logger() -> None:
+    log_file_handler = TimeStructuredFileHandler()
 
-LOG_CONFIG["handlers"]["structured_file"] = {
-    "class": "logging.StreamHandler",  # мы используем stream из кастомного хендлера
-    "formatter": "default",
-    "level": "DEBUG",
-    "stream": log_file_handler.stream,
-}
+    LOG_CONFIG["formatters"]["access"]["fmt"] = (
+        "%(levelprefix)s %(asctime)s - %(client_addr)s - %(request_line)s %(status_code)s"
+    )
+    LOG_CONFIG["formatters"]["default"]["fmt"] = "%(levelprefix)s %(asctime)s [%(name)s] - %(message)s"
+    LOG_CONFIG["formatters"]["no_color"] = {"format": "%(levelname)s %(asctime)s [%(name)s] - %(message)s"}
 
-# Логгер приложения
-LOG_CONFIG["loggers"][APP_SETTINGS.PROJECT_NAME] = {
-    "handlers": ["default", "structured_file"],
-    "level": "DEBUG",
-    "propagate": False,
-}
+    LOG_CONFIG["handlers"]["structured_file"] = {
+        "class": "logging.FileHandler",
+        "formatter": "no_color",
+        "level": "DEBUG",
+        "filename": log_file_handler.baseFilename,  # путь до файла
+        "encoding": "utf-8",
+    }
 
-# Применяем конфигурацию
-logging.config.dictConfig(LOG_CONFIG)
+    LOG_CONFIG["loggers"][APP_SETTINGS.PROJECT_NAME] = {
+        "handlers": ["default", "structured_file"],
+        "level": "DEBUG",
+        "propagate": False,
+    }
 
-# Готовый логгер, который можно импортировать
+    logging.config.dictConfig(LOG_CONFIG)
+
+
 logger = logging.getLogger(APP_SETTINGS.PROJECT_NAME)

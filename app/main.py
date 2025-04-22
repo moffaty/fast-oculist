@@ -2,7 +2,7 @@ from index import router as index_router
 from fastapi import FastAPI
 import uvicorn
 from core.settings import APP_SETTINGS
-from core.log_config import LOG_CONFIG
+from core.log_config import LOG_CONFIG, logger, setup_logger
 from fastapi.responses import ORJSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware import Middleware
@@ -38,6 +38,8 @@ app.include_router(api_router.router, prefix="/api")
 app.include_router(index_router, prefix="/index")
 
 if __name__ == "__main__":
+    setup_logger()
+    logger.info(f"{APP_SETTINGS.PROJECT_NAME} is started!")
     uvicorn.run(
         "main:app",
         log_config=LOG_CONFIG,
