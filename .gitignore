@@ -42,3 +42,6 @@ Thumbs.db
 
 # Maps
 *.osm.pbf
+
+# Logs
+logs/
