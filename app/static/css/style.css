@@ -103,6 +103,7 @@ html, body {
   padding: 10px;
   font-size: 14px;
   border-radius: 5px;
+  z-index: 111100;
 }
 
 .arrow-btn {
@@ -140,6 +141,15 @@ html, body {
   padding: 1px 10px 1px 10px; 
 }
 
+.fullscreen {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 111199;
+}
+
 .arrow-bottom {
   bottom: 10px;
   left: 50%;
@@ -152,4 +162,19 @@ html, body {
 
 .camera-x-angle::after , .camera-y-angle::after {
   content: "°";
+}
+
+#map .fullscreen-btn {
+  top: 4%;
+  z-index: 111100;
+}
+
+.video-container .fullscreen-btn {
+  padding: 5px 10px;
+  top: 94%;
+  font-size: 32px;
+}
+
+.video-container.fullscreen .arrow-btn {
+  font-size: 40px;
 }

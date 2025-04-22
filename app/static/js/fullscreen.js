@@ -1,38 +1,37 @@
+import { map } from "./index.js";
+
 const cameras = document.querySelectorAll(".video-container");
-cameras.forEach(camera => {
-    const fullscreenBtn = camera.querySelector(".fullscreen-btn");
-    function openFullscreen() {
-        fullscreenBtn.innerHTML = "&#8592;"
-        fullscreenBtn.style.padding = "5px 10px 5px 10px"; 
-        fullscreenBtn.style.top = "94%";
-        camera.style.width = "100%";
-        camera.style.height = "100%";
-        camera.style.position = "fixed";
-        camera.style.zIndex = "9999";
-        camera.style.opacity = "1";
-        camera.style.fontSize = "32px";
-        const arrows = document.querySelectorAll(".arrow-btn");
-        arrows.forEach(arrow => {
-            arrow.style.fontSize = "40px";
-        })
+const mapObject = document.querySelector("#map"); // исправили здесь
+
+function toggleFullscreenBtn(element) {
+    const fullscreenBtn = element.querySelector(".fullscreen-btn");
+    const isFullscreen = element.classList.toggle("fullscreen");
+
+    if (fullscreenBtn) {
+        fullscreenBtn.innerHTML = isFullscreen ? "&#8592;" : "&#9974;";
     }
 
-    function closeFullscreen() {
-        fullscreenBtn.innerHTML = "&#9974;"
-        fullscreenBtn.style.padding = "5px 10px 5px 10px"; 
-        fullscreenBtn.style.top = "94%";
-        camera.style.width = "100%";
-        camera.style.height = "100%";
-        camera.style.position = "fixed";
-        camera.style.zIndex = "9999";
-        camera.style.opacity = "1";
-        camera.style.fontSize = "32px";
-        const arrows = document.querySelectorAll(".arrow-btn");
-        arrows.forEach(arrow => {
-            arrow.style.fontSize = "40px";
-        })
+    const arrows = element.querySelectorAll(".arrow-btn");
+    arrows.forEach((arrow) => {
+        arrow.style.fontSize = isFullscreen ? "40px" : "";
+    });
+}
+
+cameras.forEach((camera) => {
+    const fullscreenBtn = camera.querySelector(".fullscreen-btn");
+    if (fullscreenBtn) {
+        fullscreenBtn.addEventListener("click", () =>
+            toggleFullscreenBtn(camera)
+        );
     }
-    
-    fullscreenBtn.addEventListener("click", openFullscreen);
-    
-})
+});
+
+if (mapObject) {
+    const fullscreenBtn = mapObject.querySelector(".fullscreen-btn");
+    if (fullscreenBtn) {
+        fullscreenBtn.addEventListener("click", () => {
+            toggleFullscreenBtn(mapObject);
+            map.invalidateSize();
+        });
+    }
+}
