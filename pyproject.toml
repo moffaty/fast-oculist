@@ -23,6 +23,10 @@ pytesseract = "^0.3.13"
 pillow = "^11.1.0"
 opencv-python-headless = "^4.11.0.86"
 websockets = "^15.0.1"
+opencv-python = "^4.11.0.86"
+python-multipart = "^0.0.20"
+python-jose = "^3.4.0"
+onnxruntime = "^1.21.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"
