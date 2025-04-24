@@ -1,0 +1,400 @@
+<html>
+<meta http-equiv="Expires" content="0">
+<meta http-equiv="Last-Modified" content="0">
+<meta http-equiv="Cache-Control" content="no-cache, mustrevalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<link rel="stylesheet" href="../../static/css/bootstrap.min.css">
+<script type="text/javascript" src="../../static/js/jquery-3.4.1.min.js"></script>
+<script src="../../static/js/bootstrap.min.js"></script>
+<script src="../../static/js/adapter-latest.js"></script>
+
+<h2 style="display: none" align=center>
+    Play Stream {{ .suuid }}
+</h2>
+<div class="container">
+  <div class="row">
+    <div class="col-3">
+      <div class="list-group">
+  {{ range .suuidMap }}
+    <a style="display: none" href="{{ . }}" id="{{ . }}" name="{{ . }}" class="list-group-item list-group-item-action">{{ . }}</a>
+  {{ end }}
+</div>
+    </div>
+        <div class="col">
+            <input type="hidden" name="suuid" id="suuid" value="{{ .suuid }}">
+            <input type="hidden" name="port" id="port" value="{{ .port }}">
+            <input type="hidden" id="localSessionDescription" readonly="true">
+            <input type="hidden" id="remoteSessionDescription">
+            <div id="remoteVideos">
+                <video style="position: fixed;
+                width: 100vw;
+                height: 100vh;
+                left: 0;
+                top: 0;" id="videoElem" autoplay muted controls></video>
+            </div>
+            <canvas id="canvas"></canvas>
+            <div id="div"></div>
+        </div>
+    </div>
+</div>
+<script type="text/javascript" src="../../static/js/app.js?ver={{ .version }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier"></script>
+<script>
+const video = document.getElementById('videoElem');
+const canvas = document.querySelector('canvas');
+const ctx = canvas.getContext('2d');
+const debugDiv = document.getElementById('div');
+
+const socket = new WebSocket('ws://localhost:3000/index/');
+socket.onopen = () => {
+  console.log('Подключено к серверу на порт 3000');
+};
+socket.onclose = () => {
+  console.log('Соединение с сервером на порт 3000 закрыто');
+};
+socket.onerror = (error) => {
+  console.log('Ошибка WebSocket 3000:', error);
+};
+
+// Позиционируем canvas поверх видео
+canvas.style.position = 'fixed';
+canvas.style.left = '0';
+canvas.style.top = '0';
+canvas.style.zIndex = '10'; // Выше, чем у видео
+
+// Массив для хранения текущих объектов детекции
+let currentPredictions = [];
+
+// Переменная для выделенного объекта
+let selectedObject = null;
+// Переменная для отслеживания времени последней отправки
+let lastSendTime = 0;
+
+// Настраиваем размеры canvas
+function setupCanvas() {
+  if (video.videoWidth) {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.style.width = '100vw';
+    canvas.style.height = '100vh';
+    return true;
+  }
+  return false;
+}
+
+// Загружаем модель
+async function loadModel() {
+  try {
+    debugDiv.innerHTML += '<p>Загружаем модель...</p>';
+    const model = await cocoSsd.load();
+    debugDiv.innerHTML += '<p>Модель успешно загружена!</p>';
+    return model;
+  } catch (error) {
+    debugDiv.innerHTML += `<p>Ошибка загрузки модели: ${error.message}</p>`;
+    console.error('Ошибка загрузки модели:', error);
+    return null;
+  }
+}
+
+// Функция для отправки данных о выделенном объекте
+function sendSelectedObjectData() {
+  if (!selectedObject || socket.readyState !== WebSocket.OPEN) return;
+  
+  const [x, y, width, height] = selectedObject.bbox;
+  const centerX = x + width / 2;
+  const centerY = y + height / 2;
+  
+  const data = {
+    class: selectedObject.class,
+    centerX: centerX,
+    centerY: centerY,
+    imageWidth: canvas.width,  // Отправляем текущую ширину изображения
+    imageHeight: canvas.height, // Отправляем текущую высоту изображения
+    isTracked: true
+  };
+  
+  socket.send(JSON.stringify(data));
+  console.log(`Отправлены данные выделенного объекта: ${JSON.stringify(data)}`);
+}
+
+// Функция поиска наиболее подходящего объекта для отслеживания
+function findMatchingObject(predictions) {
+  if (!selectedObject) return null;
+  
+  const selectedClass = selectedObject.class;
+  const [oldX, oldY, oldWidth, oldHeight] = selectedObject.bbox;
+  const oldCenterX = oldX + oldWidth / 2;
+  const oldCenterY = oldY + oldHeight / 2;
+  
+  let bestMatch = null;
+  let minDistance = Infinity;
+  
+  // Ищем объекты того же класса
+  const sameClassObjects = predictions.filter(p => p.class === selectedClass);
+  
+  // Если нет объектов того же класса, возвращаем null
+  if (sameClassObjects.length === 0) return null;
+  
+  // Иначе ищем ближайший по расположению
+  for (const obj of sameClassObjects) {
+    const [x, y, width, height] = obj.bbox;
+    const centerX = x + width / 2;
+    const centerY = y + height / 2;
+    
+    // Евклидово расстояние между центрами
+    const distance = Math.sqrt(
+      Math.pow(centerX - oldCenterX, 2) + 
+      Math.pow(centerY - oldCenterY, 2)
+    );
+    
+    if (distance < minDistance) {
+      minDistance = distance;
+      bestMatch = obj;
+    }
+  }
+  
+  // Устанавливаем порог расстояния для определения, что это тот же объект
+  // Если объект переместился слишком далеко, считаем что это уже другой объект
+  const maxAllowedDistance = Math.max(canvas.width, canvas.height) * 0.2; // 20% от размера экрана
+  
+  return minDistance <= maxAllowedDistance ? bestMatch : null;
+}
+
+// Функция для детекции объектов
+async function detectObjects(model) {
+  if (!model) return;
+  
+  // Проверяем, что видео воспроизводится и имеет размеры
+  if (video.paused || video.ended || !video.videoWidth) {
+    debugDiv.innerHTML += '<p>Видео не готово, повторная попытка через 500мс</p>';
+    return setTimeout(() => detectObjects(model), 500);
+  }
+
+  // Проверка размеров canvas
+  if (!setupCanvas()) {
+    debugDiv.innerHTML += '<p>Canvas не настроен, повторная попытка через 500мс</p>';
+    return setTimeout(() => detectObjects(model), 500);
+  }
+
+  try {
+    // Получаем предсказания от модели
+    const predictions = await model.detect(video);
+    
+    // Сохраняем текущие предсказания для обработки кликов
+    currentPredictions = predictions;
+    
+    // Если есть выделенный объект, ищем его среди текущих предсказаний
+    if (selectedObject) {
+      const matchedObject = findMatchingObject(predictions);
+      if (matchedObject) {
+        selectedObject = matchedObject; // Обновляем положение выделенного объекта
+        
+        // Отправляем данные раз в секунду
+        const now = Date.now();
+        if (now - lastSendTime >= 1000) {
+          sendSelectedObjectData();
+          lastSendTime = now;
+        }
+      } else {
+        // Объект пропал из поля зрения
+        debugDiv.innerHTML += '<p>Выделенный объект потерян</p>';
+        selectedObject = null;
+      }
+    }
+    
+    // Выводим данные для отладки
+    debugDiv.innerHTML = `<p>Найдено объектов: ${predictions.length}</p>`;
+    if (selectedObject) {
+      debugDiv.innerHTML += `<p>Отслеживается: ${selectedObject.class}</p>`;
+    }
+    if (predictions.length > 0) {
+      predictions.forEach(p => {
+        debugDiv.innerHTML += `<p>${p.class}: ${Math.round(p.score * 100)}%</p>`;
+      });
+    }
+    
+    // Очищаем холст
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // НЕ рисуем кадр видео, только рамки объектов
+    // ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Отображаем результаты детекции
+    predictions.forEach(prediction => {
+      // Получаем данные о распознанном объекте
+      const [x, y, width, height] = prediction.bbox;
+      //const text = `${prediction.class}: ${Math.round(prediction.score * 100)}%`;
+      const text = ``;
+      
+      // Проверяем, является ли этот объект выделенным
+      const isSelected = selectedObject && 
+                         prediction.class === selectedObject.class &&
+                         JSON.stringify(prediction.bbox) === JSON.stringify(selectedObject.bbox);
+      
+      // Определяем цвет в зависимости от того, выделен объект или нет
+      ctx.strokeStyle = isSelected ? '#00FF00' : '#FF0000'; // Зеленый для выделенного, красный для остальных
+      ctx.lineWidth = isSelected ? 6 : 4; // Более толстая линия для выделенного
+      ctx.strokeRect(x, y, width, height);
+      
+      // Рисуем фон для текста
+      ctx.fillStyle = isSelected ? 'rgba(0, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
+      const textWidth = ctx.measureText(text).width;
+      //ctx.fillRect(x, y > 20 ? y - 20 : 10, textWidth + 10, 20);
+      
+      // Рисуем подпись
+      ctx.fillStyle = '#FFFFFF'; // Белый текст
+      ctx.font = 'bold 16px Arial';
+      //ctx.fillText(text, x + 5, y > 20 ? y - 5 : 25);
+      
+      // Если это выделенный объект, рисуем сетку в центре
+      if (isSelected) {
+        const centerX = x + width / 2;
+        const centerY = y + height / 2;
+        
+        // Рисуем сетку (перекрестие)
+        ctx.strokeStyle = '#00FF00';
+        ctx.lineWidth = 2;
+        
+        // Горизонтальная линия
+        ctx.beginPath();
+        ctx.moveTo(centerX - 15, centerY);
+        ctx.lineTo(centerX + 15, centerY);
+        ctx.stroke();
+        
+        // Вертикальная линия
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY - 15);
+        ctx.lineTo(centerX, centerY + 15);
+        ctx.stroke();
+        
+        // Круг в центре
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 5, 0, 2 * Math.PI);
+        ctx.fillStyle = '#00FF00';
+        ctx.fill();
+      }
+    });
+  } catch (error) {
+    debugDiv.innerHTML += `<p>Ошибка распознавания: ${error.message}</p>`;
+    console.error('Ошибка распознавания:', error);
+  }
+  
+  // Продолжаем обнаружение в следующем кадре
+  requestAnimationFrame(() => detectObjects(model));
+}
+
+// Обработчик кликов по canvas
+function handleCanvasClick(event) {
+  // Получаем координаты клика относительно canvas
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  
+  const clickX = (event.clientX - rect.left) * scaleX;
+  const clickY = (event.clientY - rect.top) * scaleY;
+  
+  console.log(`Клик по координатам: ${clickX}, ${clickY}`);
+  
+  // Проверяем, попал ли клик в какой-либо объект
+  let clickedObject = null;
+  
+  for (const prediction of currentPredictions) {
+    const [x, y, width, height] = prediction.bbox;
+    
+    if (
+      clickX >= x && 
+      clickX <= x + width && 
+      clickY >= y && 
+      clickY <= y + height
+    ) {
+      clickedObject = prediction;
+      break;
+    }
+  }
+  
+  if (clickedObject) {
+    // Устанавливаем объект как выделенный для отслеживания
+    selectedObject = clickedObject;
+    lastSendTime = 0; // Сбрасываем время, чтобы отправить данные сразу
+    
+    const [x, y, width, height] = clickedObject.bbox;
+    const centerX = x + width / 2;
+    const centerY = y + height / 2;
+    
+    console.log(`Выбран объект "${clickedObject.class}" для отслеживания: X=${centerX}, Y=${centerY}`);
+    
+    // Отправляем информацию сразу при выборе
+    if (socket.readyState === WebSocket.OPEN) {
+      const data = {
+        class: clickedObject.class,
+        centerX: centerX,
+        centerY: centerY,
+        imageWidth: canvas.width,
+        imageHeight: canvas.height,
+        selected: true
+      };
+      socket.send(JSON.stringify(data));
+      console.log(`Отправлено на сервер: ${JSON.stringify(data)}`);
+      lastSendTime = Date.now();
+    }
+  } else {
+    // Если клик был не по объекту, сбрасываем выделение
+    selectedObject = null;
+    console.log('Выделение объекта сброшено');
+    
+    // Отправляем команду остановки камеры
+    if (socket.readyState === WebSocket.OPEN) {
+      const data = {
+        command: "stop"
+      };
+      socket.send(JSON.stringify(data));
+      console.log(`Отправлена команда остановки камеры`);
+    }
+  }
+}
+
+// Основная функция
+async function startDetection() {
+  debugDiv.innerHTML = '<p>Инициализация распознавания...</p>';
+  
+  // Добавляем обработчик кликов по canvas
+  canvas.addEventListener('click', handleCanvasClick);
+  
+  // Ожидаем, когда видео будет готово
+  if (video.readyState >= 2) {
+    setupCanvas();
+    initDetection();
+  } else {
+    video.addEventListener('loadeddata', function() {
+      debugDiv.innerHTML += '<p>Видео загружено!</p>';
+      setupCanvas();
+      initDetection();
+    });
+  }
+}
+
+async function initDetection() {
+  const model = await loadModel();
+  if (model) {
+    detectObjects(model);
+  } else {
+    debugDiv.innerHTML += '<p>Не удалось загрузить модель. Проверьте консоль для подробностей.</p>';
+  }
+}
+
+// Сначала дожидаемся загрузки страницы, потом отслеживаем состояние видео
+window.addEventListener('load', function() {
+  debugDiv.innerHTML = '<p>Страница загружена, ожидаем готовности видео...</p>';
+  
+  // Запускаем только когда и страница, и видео готовы
+  if (video) {
+    startDetection();
+  } else {
+    debugDiv.innerHTML += '<p>Элемент video не найден!</p>';
+  }
+});
+</script>
+</html>
