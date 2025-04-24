@@ -40,3 +40,5 @@ lint:
 	poetry run black .
 test:
 	PYTHONPATH=. poetry run pytest
+run-webrtc:
+	GO111MODULE=on go run *.go

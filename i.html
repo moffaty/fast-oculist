@@ -1,0 +1,1032 @@
+<script>
+    const video = document.getElementById("videoElem");
+    const canvas = document.querySelector("canvas");
+    const ctx = canvas.getContext("2d");
+    const debugDiv = document.getElementById("div");
+
+    // Позиционируем canvas поверх видео
+    canvas.style.position = "fixed";
+    canvas.style.left = "0";
+    canvas.style.top = "0";
+    canvas.style.zIndex = "10";
+
+    // Модели и классификатор
+    let mobilenet = null;
+    let knnClassifier = null;
+    let cocoModel = null;
+
+    // Базовые классы, которым мы хотим обучить
+    const CUSTOM_CLASSES = {
+        background: {
+            name: "Фон",
+            color: "#FF7700",
+            samples: 0,
+        },
+    };
+
+    // Переменные для рисования прямоугольника выделения
+    let isDrawing = false;
+    let startX = 0;
+    let startY = 0;
+    let endX = 0;
+    let endY = 0;
+    let selectionMode = false;
+    let selectedClass = null;
+
+    // Функция для создания пользовательского интерфейса
+    function createUI() {
+        // Создаем панель управления
+        const controlPanel = document.createElement("div");
+        controlPanel.style =
+            "position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.7); padding: 15px; color: white; z-index: 20; border-radius: 10px; max-width: 300px;";
+        controlPanel.innerHTML = `
+        <h3 style="margin-top: 0;">Обучение распознаванию объектов</h3>
+        <div id="model-status">Загрузка моделей...</div>
+
+        <div style="margin-top: 15px;">
+          <div id="samples-info"></div>
+          <div style="margin-top: 10px;">
+            <button id="clear-button" style="background: #FF3333; color: white; border: none; padding: 8px 15px; margin-right: 10px; border-radius: 5px; cursor: pointer;">Очистить данные</button>
+            <button id="save-button" style="background: #33AA33; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer;">Сохранить модель</button>
+          </div>
+        </div>
+
+        <div style="margin-top: 15px;">
+          <h4>Режим выделения объектов:</h4>
+          <button id="selection-mode-button" style="background: #3366FF; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; width: 100%;">Включить режим выделения</button>
+          <div id="selection-active" style="display: none; margin-top: 10px;">
+            <p>Выделите объект на видео для обучения</p>
+            <div id="new-class-form" style="display: none; margin-top: 10px;">
+              <input type="text" id="new-class-name" placeholder="Название объекта" style="padding: 8px; width: 100%; margin-bottom: 10px; border-radius: 5px; border: none;">
+              <input type="color" id="new-class-color" value="#00AAFF" style="width: 50px; height: 30px; vertical-align: middle; margin-right: 5px;">
+              <button id="save-selection" style="background: #33AA33; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer;">Сохранить</button>
+              <button id="cancel-selection" style="background: #FF3333; color: white; border: none; padding: 8px 15px; margin-left: 5px; border-radius: 5px; cursor: pointer;">Отмена</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 15px;">
+          <h4>Обучение:</h4>
+          <div id="training-buttons"></div>
+        </div>
+
+        <div style="margin-top: 15px;">
+          <h4>Добавить новый класс:</h4>
+          <div style="display: flex; flex-direction: column;">
+            <input type="text" id="add-class-name" placeholder="Название класса" style="padding: 8px; width: 100%; margin-bottom: 10px; border-radius: 5px; border: none;">
+            <div style="display: flex; align-items: center;">
+              <input type="color" id="add-class-color" value="#00AAFF" style="width: 50px; height: 30px; vertical-align: middle; margin-right: 5px;">
+              <button id="add-class-button" style="background: #3366FF; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; flex-grow: 1;">Добавить класс</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 15px;">
+          <h4>Текущие обнаружения:</h4>
+          <div id="detection-results"></div>
+        </div>
+      `;
+        document.body.appendChild(controlPanel);
+
+        // Создаем кнопки для обучения каждому классу
+        updateTrainingButtons();
+
+        // Добавляем обработчики для кнопок очистки и сохранения
+        document
+            .getElementById("clear-button")
+            .addEventListener("click", clearClassifier);
+        document
+            .getElementById("save-button")
+            .addEventListener("click", saveModel);
+
+        // Обработчик для добавления нового класса
+        document
+            .getElementById("add-class-button")
+            .addEventListener("click", addNewClass);
+
+        // Обработчик для кнопки режима выделения
+        document
+            .getElementById("selection-mode-button")
+            .addEventListener("click", toggleSelectionMode);
+
+        // Добавляем обработчики для кнопок сохранения и отмены выделения
+        document
+            .getElementById("save-selection")
+            .addEventListener("click", saveSelection);
+        document
+            .getElementById("cancel-selection")
+            .addEventListener("click", cancelSelection);
+
+        // Обновляем информацию о количестве образцов
+        updateSamplesInfo();
+
+        // Добавляем обработчики событий для рисования на canvas
+        canvas.addEventListener("mousedown", startDrawing);
+        canvas.addEventListener("mousemove", draw);
+        canvas.addEventListener("mouseup", endDrawing);
+
+        // Добавляем обработчики для сенсорных устройств
+        canvas.addEventListener("touchstart", handleTouchStart);
+        canvas.addEventListener("touchmove", handleTouchMove);
+        canvas.addEventListener("touchend", handleTouchEnd);
+    }
+
+    // Функция добавления нового класса
+    function addNewClass() {
+        const name = document.getElementById("add-class-name").value.trim();
+        const color = document.getElementById("add-class-color").value;
+
+        if (!name) {
+            alert("Введите название класса");
+            return;
+        }
+
+        // Создаем ключ на основе названия (только латиница и дефисы)
+        const key = name.toLowerCase().replace(/[^a-z0-9]/g, "-");
+
+        // Проверяем, не существует ли уже такой класс
+        if (CUSTOM_CLASSES[key]) {
+            alert("Класс с таким названием уже существует");
+            return;
+        }
+
+        // Добавляем новый класс
+        CUSTOM_CLASSES[key] = {
+            name: name,
+            color: color,
+            samples: 0,
+        };
+
+        // Обновляем интерфейс
+        updateTrainingButtons();
+        updateSamplesInfo();
+
+        // Очищаем поле ввода
+        document.getElementById("add-class-name").value = "";
+
+        // Если классификатор уже был создан, нам нужно пересоздать его
+        // с учетом нового количества классов
+        if (knnClassifier) {
+            recreateClassifier();
+        }
+    }
+
+    // Пересоздание классификатора при изменении количества классов
+    function recreateClassifier() {
+        // Сохраняем текущие веса и образцы, если возможно
+        const currentWeights = knnClassifier
+            ? knnClassifier.getWeights()
+            : null;
+
+        // Создаем новый классификатор
+        if (knnClassifier) {
+            knnClassifier.dispose();
+        }
+
+        knnClassifier = tf.sequential();
+        knnClassifier.add(
+            tf.layers.dense({
+                inputShape: [1024], // Для MobileNet v1
+                units: Object.keys(CUSTOM_CLASSES).length,
+                activation: "softmax",
+            })
+        );
+
+        knnClassifier.compile({
+            optimizer: tf.train.adam(0.0001),
+            loss: "categoricalCrossentropy",
+            metrics: ["accuracy"],
+        });
+
+        // Если у нас были веса и число классов не изменилось, попробуем восстановить их
+        // Примечание: В реальном приложении тут нужен более сложный код для обработки
+        // изменения количества классов
+    }
+
+    // Обновляем кнопки обучения
+    function updateTrainingButtons() {
+        const trainingButtons = document.getElementById("training-buttons");
+        trainingButtons.innerHTML = "";
+
+        for (const classKey in CUSTOM_CLASSES) {
+            const classInfo = CUSTOM_CLASSES[classKey];
+            const button = document.createElement("button");
+            button.id = `train-${classKey}`;
+            button.innerText = `Обучить: ${classInfo.name}`;
+            button.style = `background: ${classInfo.color}; color: white; border: none; padding: 8px 15px; margin: 5px; border-radius: 5px; display: block; width: 100%; cursor: pointer;`;
+            button.addEventListener("mousedown", () => startTraining(classKey));
+            button.addEventListener("mouseup", stopTraining);
+            button.addEventListener("mouseleave", stopTraining);
+            button.addEventListener("touchstart", () =>
+                startTraining(classKey)
+            );
+            button.addEventListener("touchend", stopTraining);
+            trainingButtons.appendChild(button);
+        }
+    }
+
+    // Включение/выключение режима выделения
+    function toggleSelectionMode() {
+        selectionMode = !selectionMode;
+        const button = document.getElementById("selection-mode-button");
+        const selectionActive = document.getElementById("selection-active");
+
+        if (selectionMode) {
+            button.innerText = "Выключить режим выделения";
+            button.style.background = "#FF3333";
+            selectionActive.style.display = "block";
+        } else {
+            button.innerText = "Включить режим выделения";
+            button.style.background = "#3366FF";
+            selectionActive.style.display = "none";
+            document.getElementById("new-class-form").style.display = "none";
+        }
+    }
+
+    // Функция для начала рисования прямоугольника
+    function startDrawing(e) {
+        if (!selectionMode) return;
+
+        isDrawing = true;
+
+        // Получаем координаты относительно canvas
+        const rect = canvas.getBoundingClientRect();
+        startX = e.clientX - rect.left;
+        startY = e.clientY - rect.top;
+        endX = startX;
+        endY = startY;
+
+        // Сбрасываем предыдущее выделение
+        redrawCanvas();
+    }
+
+    // Обработчик для сенсорного начала рисования
+    function handleTouchStart(e) {
+        if (!selectionMode) return;
+        e.preventDefault();
+
+        isDrawing = true;
+
+        // Получаем координаты относительно canvas
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        startX = touch.clientX - rect.left;
+        startY = touch.clientY - rect.top;
+        endX = startX;
+        endY = startY;
+
+        // Сбрасываем предыдущее выделение
+        redrawCanvas();
+    }
+
+    // Функция для рисования прямоугольника при движении мыши
+    function draw(e) {
+        if (!isDrawing || !selectionMode) return;
+
+        // Получаем координаты относительно canvas
+        const rect = canvas.getBoundingClientRect();
+        endX = e.clientX - rect.left;
+        endY = e.clientY - rect.top;
+
+        // Перерисовываем canvas
+        redrawCanvas();
+
+        // Рисуем текущий прямоугольник выделения
+        ctx.strokeStyle = "#00AAFF";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+
+        const width = endX - startX;
+        const height = endY - startY;
+        ctx.strokeRect(startX, startY, width, height);
+
+        // Добавляем полупрозрачную заливку
+        ctx.fillStyle = "rgba(0, 170, 255, 0.3)";
+        ctx.fillRect(startX, startY, width, height);
+
+        ctx.setLineDash([]);
+    }
+
+    // Обработчик для сенсорного движения
+    function handleTouchMove(e) {
+        if (!isDrawing || !selectionMode) return;
+        e.preventDefault();
+
+        // Получаем координаты относительно canvas
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        endX = touch.clientX - rect.left;
+        endY = touch.clientY - rect.top;
+
+        // Перерисовываем canvas
+        redrawCanvas();
+
+        // Рисуем текущий прямоугольник выделения
+        ctx.strokeStyle = "#00AAFF";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+
+        const width = endX - startX;
+        const height = endY - startY;
+        ctx.strokeRect(startX, startY, width, height);
+
+        // Добавляем полупрозрачную заливку
+        ctx.fillStyle = "rgba(0, 170, 255, 0.3)";
+        ctx.fillRect(startX, startY, width, height);
+
+        ctx.setLineDash([]);
+    }
+
+    // Функция для завершения рисования
+    function endDrawing() {
+        if (!isDrawing || !selectionMode) return;
+
+        isDrawing = false;
+
+        // Проверяем, что выделен достаточно большой прямоугольник
+        const width = Math.abs(endX - startX);
+        const height = Math.abs(endY - startY);
+
+        if (width < 20 || height < 20) {
+            alert(
+                "Выделенная область слишком мала. Пожалуйста, выделите больший участок."
+            );
+            redrawCanvas();
+            return;
+        }
+
+        // Показываем форму для создания нового класса
+        document.getElementById("new-class-form").style.display = "block";
+    }
+
+    // Обработчик для сенсорного окончания рисования
+    function handleTouchEnd(e) {
+        if (!isDrawing || !selectionMode) return;
+        e.preventDefault();
+
+        isDrawing = false;
+
+        // Проверяем, что выделен достаточно большой прямоугольник
+        const width = Math.abs(endX - startX);
+        const height = Math.abs(endY - startY);
+
+        if (width < 20 || height < 20) {
+            alert(
+                "Выделенная область слишком мала. Пожалуйста, выделите больший участок."
+            );
+            redrawCanvas();
+            return;
+        }
+
+        // Показываем форму для создания нового класса
+        document.getElementById("new-class-form").style.display = "block";
+    }
+
+    // Функция для перерисовки canvas
+    function redrawCanvas() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // Функция для сохранения выделенной области
+    async function saveSelection() {
+        // Получаем название и цвет нового класса
+        const name = document.getElementById("new-class-name").value.trim();
+        const color = document.getElementById("new-class-color").value;
+
+        if (!name) {
+            alert("Введите название объекта");
+            return;
+        }
+
+        // Создаем ключ на основе названия (только латиница и дефисы)
+        const key = "selected-" + name.toLowerCase().replace(/[^a-z0-9]/g, "-");
+
+        // Проверяем, не существует ли уже такой класс
+        if (
+            CUSTOM_CLASSES[key] &&
+            !confirm(
+                "Класс с таким названием уже существует. Хотите добавить образец к существующему классу?"
+            )
+        ) {
+            return;
+        }
+
+        // Нормализуем координаты (для случая, если пользователь рисовал в обратном направлении)
+        const selectionX = Math.min(startX, endX);
+        const selectionY = Math.min(startY, endY);
+        const selectionWidth = Math.abs(endX - startX);
+        const selectionHeight = Math.abs(endY - startY);
+
+        // Создаем временный canvas с выделенной областью
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = selectionWidth;
+        tempCanvas.height = selectionHeight;
+        const tempCtx = tempCanvas.getContext("2d");
+        tempCtx.drawImage(
+            video,
+            selectionX,
+            selectionY,
+            selectionWidth,
+            selectionHeight,
+            0,
+            0,
+            selectionWidth,
+            selectionHeight
+        );
+
+        // Добавляем новый класс, если его не существует
+        if (!CUSTOM_CLASSES[key]) {
+            CUSTOM_CLASSES[key] = {
+                name: name,
+                color: color,
+                samples: 0,
+            };
+
+            // Пересоздаем классификатор с учетом нового класса
+            recreateClassifier();
+            updateTrainingButtons();
+        }
+
+        // Получаем признаки из MobileNet для выделенной области
+        try {
+            const features = await getFeatures(tempCanvas);
+
+            // Создаем метку класса (one-hot encoding)
+            const numClasses = Object.keys(CUSTOM_CLASSES).length;
+            const classIndex = Object.keys(CUSTOM_CLASSES).indexOf(key);
+            const label = tf.tidy(() =>
+                tf.oneHot(tf.tensor1d([classIndex], "int32"), numClasses)
+            );
+
+            // Обучаем KNN классификатор
+            await knnClassifier.fit(features.expandDims(0), label, {
+                epochs: 5, // Обучаем чуть дольше для лучшего запоминания
+                batchSize: 1,
+            });
+
+            // Увеличиваем счетчик образцов
+            CUSTOM_CLASSES[key].samples++;
+            updateSamplesInfo();
+
+            // Освобождаем память
+            features.dispose();
+            label.dispose();
+
+            // Очищаем выделение и скрываем форму
+            redrawCanvas();
+            document.getElementById("new-class-name").value = "";
+            document.getElementById("new-class-form").style.display = "none";
+
+            // Сообщаем пользователю
+            document.getElementById(
+                "model-status"
+            ).textContent = `Образец "${name}" успешно добавлен!`;
+        } catch (error) {
+            console.error("Ошибка при обучении:", error);
+            alert("Произошла ошибка при добавлении образца: " + error.message);
+        }
+    }
+
+    // Функция для отмены выделения
+    function cancelSelection() {
+        redrawCanvas();
+        document.getElementById("new-class-form").style.display = "none";
+        document.getElementById("new-class-name").value = "";
+    }
+
+    // Функция обновления информации о количестве образцов
+    function updateSamplesInfo() {
+        const samplesInfo = document.getElementById("samples-info");
+        samplesInfo.innerHTML = '<h4 style="margin-bottom: 5px;">Образцы:</h4>';
+
+        for (const classKey in CUSTOM_CLASSES) {
+            const classInfo = CUSTOM_CLASSES[classKey];
+            samplesInfo.innerHTML += `
+          <div style="margin: 3px 0;">
+            <span style="background: ${classInfo.color}; width: 12px; height: 12px; display: inline-block; margin-right: 5px;"></span>
+            ${classInfo.name}: ${classInfo.samples} образцов
+          </div>
+        `;
+        }
+    }
+
+    // Загрузка всех необходимых моделей
+    async function loadModels() {
+        try {
+            document.getElementById("model-status").textContent =
+                "Загрузка моделей...";
+
+            // Загружаем MobileNet
+            mobilenet = await tf.loadLayersModel(
+                "https://storage.googleapis.com/tfjs-models/tfjs/mobilenet_v1_0.25_224/model.json"
+            );
+            const mobilenetWarmer = tf.zeros([1, 224, 224, 3]);
+            mobilenet.predict(mobilenetWarmer);
+            mobilenetWarmer.dispose();
+
+            // Инициализируем KNN классификатор
+            knnClassifier = tf.sequential();
+            knnClassifier.add(
+                tf.layers.dense({
+                    inputShape: [1024], // Для MobileNet v1
+                    units: Object.keys(CUSTOM_CLASSES).length,
+                    activation: "softmax",
+                })
+            );
+
+            knnClassifier.compile({
+                optimizer: tf.train.adam(0.0001),
+                loss: "categoricalCrossentropy",
+                metrics: ["accuracy"],
+            });
+
+            // Загружаем COCO-SSD для выделения объектов
+            cocoModel = await cocoSsd.load();
+
+            document.getElementById("model-status").textContent =
+                "Все модели загружены!";
+
+            return true;
+        } catch (error) {
+            document.getElementById(
+                "model-status"
+            ).textContent = `Ошибка загрузки: ${error.message}`;
+            console.error("Ошибка загрузки моделей:", error);
+            return false;
+        }
+    }
+
+    // Подготовка изображения для MobileNet
+    function preprocessImage(imgElement) {
+        return tf.tidy(() => {
+            // Преобразуем изображение в тензор
+            const imgTensor = tf.browser.fromPixels(imgElement);
+
+            // Изменяем размер до 224x224 (требуется для MobileNet)
+            const resized = tf.image.resizeBilinear(imgTensor, [224, 224]);
+
+            // Нормализуем значения пикселей от 0 до 1
+            const normalized = resized.div(255);
+
+            // Расширяем размерность для батча (добавляем ось батча)
+            const batched = normalized.expandDims(0);
+
+            return batched;
+        });
+    }
+
+    // Получение признаков из MobileNet
+    async function getFeatures(imgElement) {
+        return tf.tidy(() => {
+            const preprocessedImg = preprocessImage(imgElement);
+
+            // Получаем выход предпоследнего слоя MobileNet (признаки)
+            const activation = mobilenet.predict(preprocessedImg);
+
+            // Усредняем и сжимаем до вектора признаков
+            return activation.reshape([1024]);
+        });
+    }
+
+    // Переменные для обучения
+    let isTraining = false;
+    let currentClass = null;
+    let trainingInterval = null;
+
+    // Начинаем обучение для конкретного класса
+    function startTraining(classKey) {
+        if (!mobilenet || !knnClassifier) {
+            alert("Модели еще не загружены. Пожалуйста, подождите.");
+            return;
+        }
+
+        isTraining = true;
+        currentClass = classKey;
+
+        // Обучаем несколько раз в секунду
+        trainingInterval = setInterval(addCurrentExample, 100);
+
+        // Меняем текст кнопки
+        document.getElementById(
+            `train-${classKey}`
+        ).innerText = `Записываю ${CUSTOM_CLASSES[classKey].name}...`;
+    }
+
+    // Останавливаем обучение
+    function stopTraining() {
+        if (isTraining && currentClass) {
+            isTraining = false;
+
+            // Восстанавливаем текст кнопки
+            document.getElementById(
+                `train-${currentClass}`
+            ).innerText = `Обучить: ${CUSTOM_CLASSES[currentClass].name}`;
+
+            clearInterval(trainingInterval);
+            currentClass = null;
+        }
+    }
+
+    // Добавляем текущий кадр как пример для обучения
+    async function addCurrentExample() {
+        if (!isTraining || !currentClass || !video.videoWidth) return;
+
+        try {
+            // Создаем временный canvas с текущим кадром видео
+            const tempCanvas = document.createElement("canvas");
+            tempCanvas.width = video.videoWidth;
+            tempCanvas.height = video.videoHeight;
+            const tempCtx = tempCanvas.getContext("2d");
+            tempCtx.drawImage(video, 0, 0);
+
+            // Для более точного обучения можно использовать обнаружение объектов
+            // и выделение региона интереса
+            let regionOfInterest = tempCanvas;
+
+            if (currentClass !== "background") {
+                // Пытаемся найти объект через COCO-SSD для лучшего обучения
+                const predictions = await cocoModel.detect(video);
+
+                // Ищем подходящий объект (если обычный класс, а не кастомный выделенный)
+                if (
+                    currentClass === "specific-building" ||
+                    currentClass === "specific-hand"
+                ) {
+                    const targetClass =
+                        currentClass === "specific-building"
+                            ? "building"
+                            : "person";
+                    const object = predictions.find(
+                        (p) => p.class === targetClass
+                    );
+
+                    if (object) {
+                        const [x, y, width, height] = object.bbox;
+
+                        // Создаем canvas с регионом интереса
+                        const roiCanvas = document.createElement("canvas");
+                        roiCanvas.width = width;
+                        roiCanvas.height = height;
+                        const roiCtx = roiCanvas.getContext("2d");
+                        roiCtx.drawImage(
+                            video,
+                            x,
+                            y,
+                            width,
+                            height,
+                            0,
+                            0,
+                            width,
+                            height
+                        );
+
+                        regionOfInterest = roiCanvas;
+                    }
+                }
+            }
+
+            // Получаем признаки через MobileNet
+            const features = await getFeatures(regionOfInterest);
+
+            // Создаем метку класса (one-hot encoding)
+            const numClasses = Object.keys(CUSTOM_CLASSES).length;
+            const classIndex =
+                Object.keys(CUSTOM_CLASSES).indexOf(currentClass);
+            const label = tf.tidy(() =>
+                tf.oneHot(tf.tensor1d([classIndex], "int32"), numClasses)
+            );
+
+            // Обучаем KNN классификатор
+            await knnClassifier.fit(features.expandDims(0), label, {
+                epochs: 1,
+                batchSize: 1,
+            });
+
+            // Увеличиваем счетчик образцов
+            CUSTOM_CLASSES[currentClass].samples++;
+            updateSamplesInfo();
+
+            // Освобождаем память
+            features.dispose();
+            label.dispose();
+        } catch (error) {
+            console.error("Ошибка при обучении:", error);
+        }
+    }
+
+    // Очищаем классификатор
+    function clearClassifier() {
+        if (confirm("Вы уверены, что хотите удалить все образцы обучения?")) {
+            // Пересоздаем классификатор
+            if (knnClassifier) {
+                knnClassifier.dispose();
+                knnClassifier = tf.sequential();
+                knnClassifier.add(
+                    tf.layers.dense({
+                        inputShape: [1024],
+                        units: Object.keys(CUSTOM_CLASSES).length,
+                        activation: "softmax",
+                    })
+                );
+
+                knnClassifier.compile({
+                    optimizer: tf.train.adam(0.0001),
+                    loss: "categoricalCrossentropy",
+                    metrics: ["accuracy"],
+                });
+            }
+
+            // Сбрасываем счетчики образцов
+            for (const classKey in CUSTOM_CLASSES) {
+                CUSTOM_CLASSES[classKey].samples = 0;
+            }
+
+            updateSamplesInfo();
+            document.getElementById("model-status").textContent =
+                "Данные обучения очищены";
+        }
+    }
+
+    // Сохраняем модель в локальное хранилище
+    async function saveModel() {
+        if (
+            !knnClassifier ||
+            Object.values(CUSTOM_CLASSES).every((c) => c.samples === 0)
+        ) {
+            alert("Сначала нужно обучить классификатор!");
+            return;
+        }
+
+        try {
+            const saveResult = await knnClassifier.save(
+                "localstorage://knn-classifier"
+            );
+
+            // Сохраняем информацию о классах
+            localStorage.setItem(
+                "knn-classifier-classes",
+                JSON.stringify(
+                    Object.fromEntries(
+                        Object.entries(CUSTOM_CLASSES).map(([key, value]) => [
+                            key,
+                            {
+                                name: value.name,
+                                color: value.color,
+                                samples: value.samples,
+                            },
+                        ])
+                    )
+                )
+            );
+
+            document.getElementById("model-status").textContent =
+                "Модель успешно сохранена!";
+        } catch (error) {
+            console.error("Ошибка при сохранении модели:", error);
+            document.getElementById("model-status").textContent =
+                "Ошибка сохранения: " + error.message;
+        }
+    }
+
+    // Загружаем модель из локального хранилища
+    async function loadSavedModel() {
+        try {
+            // Проверяем, существует ли сохраненная модель
+            const models = await tf.io.listModels();
+            if (models["localstorage://knn-classifier"]) {
+                // Загружаем модель
+                knnClassifier = await tf.loadLayersModel(
+                    "localstorage://knn-classifier"
+                );
+
+                knnClassifier.compile({
+                    optimizer: tf.train.adam(0.0001),
+                    loss: "categoricalCrossentropy",
+                    metrics: ["accuracy"],
+                });
+
+                // Загружаем информацию о классах
+                const savedClasses = JSON.parse(
+                    localStorage.getItem("knn-classifier-classes") || "{}"
+                );
+
+                // Обновляем наши классы из сохраненных данных
+                for (const classKey in savedClasses) {
+                    CUSTOM_CLASSES[classKey] = {
+                        name:
+                            savedClasses[classKey].name || "Неизвестный класс",
+                        color: savedClasses[classKey].color || "#FF0000",
+                        samples: savedClasses[classKey].samples || 0,
+                    };
+                }
+
+                // Обновляем интерфейс
+                updateTrainingButtons();
+                updateSamplesInfo();
+
+                document.getElementById("model-status").textContent =
+                    "Сохраненная модель загружена!";
+                return true;
+            }
+        } catch (error) {
+            console.error("Ошибка при загрузке модели:", error);
+        }
+        return false;
+    }
+
+    // Функция для детекции объектов
+    async function detectObjects() {
+        // Проверяем, что видео воспроизводится и модели загружены
+        if (
+            video.paused ||
+            video.ended ||
+            !video.videoWidth ||
+            !mobilenet ||
+            !knnClassifier
+        ) {
+            requestAnimationFrame(detectObjects);
+            return;
+        }
+
+        try {
+            // Настраиваем canvas
+            if (canvas.width !== video.videoWidth) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+            }
+
+            // Очищаем холст
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Если мы в режиме выделения и рисуем, не выполняем обнаружение
+            if (selectionMode && isDrawing) {
+                draw({
+                    clientX: endX + canvas.getBoundingClientRect().left,
+                    clientY: endY + canvas.getBoundingClientRect().top,
+                });
+                requestAnimationFrame(detectObjects);
+                return;
+            }
+
+            // Получаем обычные объекты через COCO-SSD
+            const predictions = await cocoModel.detect(video);
+
+            // Анализируем все регионы интереса - как стандартные, так и выделенные вручную
+            let regionsToAnalyze = [];
+
+            // Добавляем стандартные объекты из COCO-SSD
+            for (const prediction of predictions) {
+                const [x, y, width, height] = prediction.bbox;
+
+                regionsToAnalyze.push({
+                    type: "standard",
+                    x: x,
+                    y: y,
+                    width: width,
+                    height: height,
+                    cocoClass: prediction.class,
+                });
+
+                // Рисуем стандартные обнаружения (легкой обводкой)
+                ctx.strokeStyle = "#777777";
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, width, height);
+            }
+
+            // Добавляем полный кадр для анализа фона и других объектов
+            regionsToAnalyze.push({
+                type: "full",
+                x: 0,
+                y: 0,
+                width: video.videoWidth,
+                height: video.videoHeight,
+            });
+
+            // Результаты пользовательского классификатора
+            let customDetections = [];
+
+            // Обрабатываем каждый регион
+            for (const region of regionsToAnalyze) {
+                // Создаем временный canvas с регионом интереса
+                const tempCanvas = document.createElement("canvas");
+                tempCanvas.width = region.width;
+                tempCanvas.height = region.height;
+                const tempCtx = tempCanvas.getContext("2d");
+                tempCtx.drawImage(
+                    video,
+                    region.x,
+                    region.y,
+                    region.width,
+                    region.height,
+                    0,
+                    0,
+                    region.width,
+                    region.height
+                );
+
+                // Классифицируем регион через наш KNN
+                const features = await getFeatures(tempCanvas);
+
+                // Получаем предсказание классификатора
+                const logits = knnClassifier.predict(features.expandDims(0));
+                const probabilities = await logits.data();
+                logits.dispose();
+                features.dispose();
+
+                // Находим класс с наибольшей вероятностью
+                const classIndex = probabilities.indexOf(
+                    Math.max(...probabilities)
+                );
+                const classKey = Object.keys(CUSTOM_CLASSES)[classIndex];
+                const probability = probabilities[classIndex];
+
+                // Проверяем пороговое значение уверенности
+                const confidenceThreshold =
+                    region.type === "standard" ? 0.7 : 0.8;
+
+                // Если достаточно уверены и это не фон (или фон, но мы анализируем полный кадр)
+                if (
+                    probability > confidenceThreshold &&
+                    (classKey !== "background" || region.type === "full")
+                ) {
+                    // Добавляем как обнаружение
+                    customDetections.push({
+                        class: classKey,
+                        confidence: probability,
+                        bbox: [region.x, region.y, region.width, region.height],
+                    });
+                }
+            }
+
+            // Отображаем пользовательские обнаружения
+            customDetections.forEach((detection) => {
+                const [x, y, width, height] = detection.bbox;
+                const classInfo = CUSTOM_CLASSES[detection.class];
+
+                // Рисуем рамку
+                ctx.strokeStyle = classInfo.color;
+                ctx.lineWidth = 4;
+                ctx.strokeRect(x, y, width, height);
+
+                // Добавляем фон для подписи
+                ctx.fillStyle = classInfo.color + "CC"; // Полупрозрачный фон
+                const textWidth = ctx.measureText(classInfo.name).width;
+                ctx.fillRect(x, y - 30, textWidth + 60, 30);
+
+                // Добавляем подпись
+                ctx.fillStyle = "#FFFFFF";
+                ctx.font = "bold 18px Arial";
+                ctx.fillText(
+                    `${classInfo.name} ${Math.round(
+                        detection.confidence * 100
+                    )}%`,
+                    x + 5,
+                    y - 10
+                );
+            });
+
+            // Обновляем информацию о текущих обнаружениях
+            const detectionResults =
+                document.getElementById("detection-results");
+            if (customDetections.length > 0) {
+                detectionResults.innerHTML = customDetections
+                    .map((detection) => {
+                        const classInfo = CUSTOM_CLASSES[detection.class];
+                        return `<div style="margin: 5px 0;">
+          <span style="background: ${
+              classInfo.color
+          }; width: 12px; height: 12px; display: inline-block; margin-right: 5px;"></span>
+          ${classInfo.name}: ${Math.round(detection.confidence * 100)}%
+        </div>`;
+                    })
+                    .join("");
+            } else {
+                detectionResults.innerHTML = "<p>Нет обнаружений</p>";
+            }
+        } catch (error) {
+            console.error("Ошибка при обнаружении:", error);
+        }
+
+        // Продолжаем обнаружение в следующем кадре
+        requestAnimationFrame(detectObjects);
+    }
+
+    // Инициализация
+    async function init() {
+        createUI();
+
+        // Загружаем модели
+        const modelsLoaded = await loadModels();
+
+        if (modelsLoaded) {
+            // Пытаемся загрузить сохраненную модель
+            await loadSavedModel();
+
+            // Запускаем обнаружение объектов
+            detectObjects();
+        }
+    }
+
+    // Загружаем при запуске страницы
+    window.addEventListener("load", init);
+</script>

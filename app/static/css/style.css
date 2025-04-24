@@ -34,12 +34,14 @@ html, body {
   flex: 1;
   height: 100%;
   position: relative;
+  transition: all 0.2s ease-in-out;
 }
 
 .video-container {
   flex: 1;
   height: 50%;
   position: relative;
+  transition: all 0.2s ease-in-out;
 }
 
 .video-frame {
@@ -177,4 +179,12 @@ html, body {
 
 .video-container.fullscreen .arrow-btn {
   font-size: 40px;
+}
+
+.video-frame {
+  background: #0000009e;
+}
+
+.video-container {
+  border: 1px solid black;
 }

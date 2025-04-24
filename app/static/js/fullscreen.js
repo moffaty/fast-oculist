@@ -1,9 +1,10 @@
-import { map } from "./index.js";
+import { map } from "./map.js";
 
 const cameras = document.querySelectorAll(".video-container");
+console.log(cameras);
 const mapObject = document.querySelector("#map"); // исправили здесь
 
-function toggleFullscreenBtn(element) {
+function toggleFullscreen(element) {
     const fullscreenBtn = element.querySelector(".fullscreen-btn");
     const isFullscreen = element.classList.toggle("fullscreen");
 
@@ -20,9 +21,7 @@ function toggleFullscreenBtn(element) {
 cameras.forEach((camera) => {
     const fullscreenBtn = camera.querySelector(".fullscreen-btn");
     if (fullscreenBtn) {
-        fullscreenBtn.addEventListener("click", () =>
-            toggleFullscreenBtn(camera)
-        );
+        fullscreenBtn.addEventListener("click", () => toggleFullscreen(camera));
     }
 });
 
@@ -30,7 +29,7 @@ if (mapObject) {
     const fullscreenBtn = mapObject.querySelector(".fullscreen-btn");
     if (fullscreenBtn) {
         fullscreenBtn.addEventListener("click", () => {
-            toggleFullscreenBtn(mapObject);
+            toggleFullscreen(mapObject);
             map.invalidateSize();
         });
     }

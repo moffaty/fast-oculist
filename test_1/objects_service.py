@@ -284,7 +284,6 @@ async def compare_image_with_objects(
     image: UploadFile = File(...), top_n: int = 5, session: Session = Depends(db_session)
 ):
     """Сравнение загруженного изображения с объектами в базе данных"""
-    # Чтение и обработка изображения
     content = await image.read()
     nparr = np.frombuffer(content, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -356,9 +355,7 @@ async def export_objects():
 
 @app.post("/objects/reset-database")
 async def reset_database():
-    """Сброс базы данных объектов (только для тестирования)"""
     with create_session() as session:
-        # Удаление всех объектов
         objects = session.exec(select(Object)).all()
         for obj in objects:
             session.delete(obj)
