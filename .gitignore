@@ -8,6 +8,7 @@ __pycache__/
 # Virtualenvs
 poetry.lock
 .env
+.env.json
 .venv/
 !.env.example
 
