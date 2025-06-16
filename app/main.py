@@ -39,11 +39,15 @@ app.include_router(index_router, prefix="/index")
 
 if __name__ == "__main__":
     setup_logger()
-    logger.info(f"{APP_SETTINGS.PROJECT_NAME} is started!")
+    logger.info(f"{APP_SETTINGS.PROJECT_NAME} is starting...")
+    logger.info(f"Port: {APP_SETTINGS.PORT}")
+
     uvicorn.run(
         "main:app",
+        host="0.0.0.0",  # noqa: S104
         log_config=LOG_CONFIG,
         port=APP_SETTINGS.PORT,
         proxy_headers=True,
         reload=True,
+        access_log=True,
     )

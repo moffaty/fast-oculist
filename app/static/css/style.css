@@ -1,5 +1,6 @@
 * {
   font-family: 'Courier New', monospace;
+  font-size: 20px;
 }
 
 html, body {
@@ -68,6 +69,10 @@ html, body {
   padding: 5px;
 }
 
+.camera-x-text, .camera-y-text, .camera-y, .camera-x, .camera-x-angle, .camera-y-angle {
+  font-size: 14px !important;
+}
+
 .crosshair {
   position: absolute;
   top: 50%;
@@ -100,12 +105,27 @@ html, body {
   position: absolute;
   bottom: 10px;
   right: 10px;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.8);
   color: white;
   padding: 10px;
-  font-size: 14px;
   border-radius: 5px;
   z-index: 111100;
+}
+
+.map-compass {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 10px;
+  border-radius: 5px;
+  z-index: 111100;
+}
+
+#compass-icon {
+  font-size: 140px;
+  transition: transform 0.3s ease;
 }
 
 .arrow-btn {
