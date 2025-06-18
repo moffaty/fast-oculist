@@ -41,4 +41,4 @@ lint:
 test:
 	PYTHONPATH=. poetry run pytest
 run-webrtc:
-	GO111MODULE=on go run RTSPtoWebRTC/*.go
+	GO111MODULE=on go run *.go
