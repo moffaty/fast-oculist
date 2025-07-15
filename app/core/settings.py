@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
 
@@ -16,10 +16,10 @@ CAMERAS = [CAMERA_1, CAMERA_2]
 
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str
-    VERSION: str
-    DEBUG: bool
-    PORT: int
+    PROJECT_NAME: str = Field("Oculist")
+    VERSION: str = Field("0.1.0")
+    DEBUG: bool = Field(True)
+    PORT: int = Field(3000)
 
     ROOT_DIR: Path = Path(__file__).parent.parent
     STATIC_DIR: Path = ROOT_DIR / "static"

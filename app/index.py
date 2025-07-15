@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 
-camera_control = CameraController()
+# camera_control = CameraController()
 router = APIRouter(tags=["index"])
 templates = Jinja2Templates(directory=APP_SETTINGS.TEMPLATE_DIR)
 
