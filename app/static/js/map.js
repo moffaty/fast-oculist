@@ -1,5 +1,5 @@
 export let map = L.map("map", { attributionControl: false }).setView(
-    [51.505, -0.09],
+    [59.938784, 30.314997],
     13
 );
 
@@ -7,7 +7,7 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {}).addTo(
     map
 );
 
-let marker = L.marker([51.5, -0.09]).addTo(map);
+let marker = L.marker([59.938784, 30.314997]).addTo(map);
 marker.bindPopup("Ваше местоположение.").openPopup();
 
 function updateCompass(bearing) {
